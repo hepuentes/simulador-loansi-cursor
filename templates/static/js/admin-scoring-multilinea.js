@@ -1240,7 +1240,7 @@ function getCSRFToken() {
 
 /**
  * Agrega un nuevo criterio a la línea de crédito seleccionada
- * TODO: Implementar modal de creación de criterio
+ * Los criterios se gestionan desde el catálogo maestro y se comparten entre líneas
  */
 function agregarCriterioLinea() {
   if (!lineaSeleccionadaId) {
@@ -1248,12 +1248,12 @@ function agregarCriterioLinea() {
     return;
   }
 
-  // Por ahora mostrar mensaje informativo
+  // Mostrar mensaje informativo
   mostrarAlertaScoring(
-    "La gestión de criterios por línea estará disponible próximamente. " +
-      'Por ahora use la pestaña "Global (Legacy)" para configurar criterios globales.',
+    "Los criterios de scoring se comparten entre todas las líneas. " +
+      "Configure niveles de riesgo y factores de rechazo específicos para cada línea.",
     "info",
-    8000
+    6000
   );
 }
 
@@ -1265,48 +1265,62 @@ function renderCriteriosLinea(criterios) {
   const container = document.getElementById("criteriosLineaContainer");
   if (!container) return;
 
-  if (!criterios || criterios.length === 0) {
-    container.innerHTML = `
+  // Los criterios se comparten entre líneas (catálogo maestro)
+  let html = `
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Criterios de Evaluación</strong>: Los criterios de scoring se aplican a todas las líneas
+            de crédito. Lo que diferencia cada línea son los <strong>niveles de riesgo</strong> y los 
+            <strong>factores de rechazo</strong> que puede configurar en las pestañas anteriores.
+        </div>
+    `;
+
+  if (!criterios || Object.keys(criterios).length === 0) {
+    html += `
             <div class="text-center py-4 text-muted">
                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                No hay criterios configurados para esta línea.<br>
-                <small>Se usarán los criterios globales como fallback.</small>
+                No hay criterios en el catálogo maestro.
             </div>
         `;
+    container.innerHTML = html;
     return;
   }
 
-  // TODO: Implementar renderizado completo de criterios
-  let html = `
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            Esta línea tiene ${criterios.length} criterios configurados.
-            La edición individual estará disponible próximamente.
-        </div>
+  const criteriosArray = Object.entries(criterios);
+  
+  html += `
+        <p class="text-muted small mb-3">
+            <i class="bi bi-check-circle text-success me-1"></i>
+            ${criteriosArray.length} criterios activos en el catálogo maestro
+        </p>
         <div class="table-responsive">
-            <table class="table table-sm">
-                <thead>
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
                     <tr>
                         <th>Criterio</th>
-                        <th>Peso</th>
-                        <th>Sección</th>
-                        <th>Activo</th>
+                        <th class="text-center">Peso</th>
+                        <th>Tipo</th>
+                        <th class="text-center">Rangos</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
-
-  criterios.forEach((c) => {
+  
+  criteriosArray.forEach(([codigo, c]) => {
+    const numRangos = c.rangos ? c.rangos.length : 0;
     html += `
-            <tr>
-                <td>${c.nombre || c.criterio_nombre || "-"}</td>
-                <td>${c.peso || c.peso_default || "-"}%</td>
-                <td>${c.seccion_nombre || "-"}</td>
-                <td>${c.activo ? "✅" : "❌"}</td>
-            </tr>
-        `;
+                <tr>
+                    <td>
+                        <strong>${c.nombre || codigo}</strong>
+                        ${c.descripcion ? `<br><small class="text-muted">${c.descripcion}</small>` : ''}
+                    </td>
+                    <td class="text-center">${c.peso || 5}</td>
+                    <td><span class="badge bg-secondary">${c.tipo_campo || 'numerico'}</span></td>
+                    <td class="text-center">${numRangos}</td>
+                </tr>
+            `;
   });
-
+  
   html += `
                 </tbody>
             </table>
