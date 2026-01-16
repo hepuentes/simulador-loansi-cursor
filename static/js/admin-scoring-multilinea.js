@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Verificar si estamos en la pestaña de Scoring
   const scoringTab = document.getElementById("Scoring");
   if (scoringTab) {
+    console.log("🔄 Inicializando scoring multi-línea...");
     // Inicializar selector de línea
     initSelectorLineaCredito();
   }
@@ -35,6 +36,8 @@ document.addEventListener("DOMContentLoaded", function () {
  * Inicializa el selector de línea de crédito
  */
 async function initSelectorLineaCredito() {
+  console.log("🔄 Cargando líneas de crédito para scoring...");
+  
   try {
     const response = await fetch("/api/scoring/lineas-credito", {
       method: "GET",
@@ -47,6 +50,7 @@ async function initSelectorLineaCredito() {
     const data = await response.json();
 
     if (data.success) {
+      console.log("✅ Líneas de crédito cargadas:", data.lineas.length);
       lineasCreditoDisponibles = data.lineas;
       renderSelectorLinea(data.lineas);
 
@@ -55,11 +59,11 @@ async function initSelectorLineaCredito() {
         await seleccionarLineaCredito(data.lineas[0].id, data.lineas[0].nombre);
       }
     } else {
-      console.error("Error cargando líneas:", data.error);
+      console.error("❌ Error cargando líneas:", data.error);
       mostrarAlertaScoring("Error al cargar líneas de crédito", "danger");
     }
   } catch (error) {
-    console.error("Error en initSelectorLineaCredito:", error);
+    console.error("❌ Error en initSelectorLineaCredito:", error);
     mostrarAlertaScoring("Error de conexión", "danger");
   }
 }
@@ -164,10 +168,9 @@ async function onCambioLineaCredito(lineaId) {
  * Selecciona una línea de crédito y carga su configuración
  */
 async function seleccionarLineaCredito(lineaId, nombreLinea) {
+  console.log(`🔄 Cargando configuración de línea ${nombreLinea} (ID: ${lineaId})...`);
+  
   try {
-    // Mostrar loading
-    mostrarLoadingScoring(true);
-
     lineaSeleccionadaId = lineaId;
     lineaSeleccionadaNombre = nombreLinea;
 
@@ -177,11 +180,17 @@ async function seleccionarLineaCredito(lineaId, nombreLinea) {
       select.value = lineaId;
     }
 
-    // Actualizar badge
+    // Actualizar badge principal
     const badge = document.getElementById("badgeLineaActual");
     if (badge) {
       badge.textContent = nombreLinea;
     }
+    
+    // Actualizar badges en las pestañas
+    const badgeNiveles = document.getElementById("badgeLineaNiveles");
+    const badgeFactores = document.getElementById("badgeLineaFactores");
+    if (badgeNiveles) badgeNiveles.textContent = nombreLinea;
+    if (badgeFactores) badgeFactores.textContent = nombreLinea;
 
     // Cargar configuración de la línea
     const response = await fetch(`/api/scoring/linea/${lineaId}/config`, {
@@ -195,6 +204,7 @@ async function seleccionarLineaCredito(lineaId, nombreLinea) {
     const data = await response.json();
 
     if (data.success) {
+      console.log(`✅ Configuración de ${nombreLinea} cargada correctamente`);
       configScoringLinea = data.config;
 
       // Actualizar info de línea
@@ -206,23 +216,17 @@ async function seleccionarLineaCredito(lineaId, nombreLinea) {
       renderConfigGeneralLinea(data.config.config_general);
 
       mostrarContenidoScoring();
-      mostrarAlertaScoring(
-        `Configuración de ${nombreLinea} cargada`,
-        "success",
-        2000
-      );
+      console.log(`✅ Línea ${nombreLinea} lista para editar`);
     } else {
-      console.error("Error cargando config:", data.error);
+      console.error("❌ Error cargando config:", data.error);
       mostrarAlertaScoring(
         `Error al cargar configuración: ${data.error}`,
         "danger"
       );
     }
   } catch (error) {
-    console.error("Error en seleccionarLineaCredito:", error);
+    console.error("❌ Error en seleccionarLineaCredito:", error);
     mostrarAlertaScoring("Error de conexión", "danger");
-  } finally {
-    mostrarLoadingScoring(false);
   }
 }
 
@@ -1232,75 +1236,11 @@ function getCSRFToken() {
 // ============================================================================
 
 /**
- * Agrega un nuevo criterio a la línea de crédito seleccionada
- * Los criterios se gestionan desde el catálogo maestro y se comparten entre líneas
+ * Función placeholder para agregar criterio
+ * La pestaña de criterios está oculta, esta función no debería llamarse
  */
 function agregarCriterioLinea() {
-  if (!lineaSeleccionadaId) {
-    mostrarAlertaScoring("Seleccione una línea de crédito primero", "warning");
-    return;
-  }
-
-  // Mostrar modal informativo con opciones
-  const modalExistente = document.getElementById("infoCriteriosModal");
-  if (modalExistente) modalExistente.remove();
-
-  const modalHtml = `
-    <div class="modal fade" id="infoCriteriosModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header bg-info text-white">
-            <h5 class="modal-title">
-              <i class="bi bi-info-circle me-2"></i>Información sobre Criterios
-            </h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <div class="alert alert-warning mb-3">
-              <i class="bi bi-exclamation-triangle me-2"></i>
-              <strong>Criterios Compartidos</strong>
-            </div>
-            <p>Los <strong>criterios de scoring</strong> (como edad, ingresos, score datacredito, etc.) 
-            se aplican de forma <strong>global</strong> a todas las líneas de crédito.</p>
-            
-            <p>Lo que diferencia cada línea son:</p>
-            <ul>
-              <li><strong>Niveles de Riesgo</strong>: Rangos de score y tasas específicas</li>
-              <li><strong>Factores de Rechazo</strong>: Condiciones automáticas de rechazo</li>
-              <li><strong>Configuración General</strong>: Parámetros específicos de la línea</li>
-            </ul>
-            
-            <p class="mb-0">Use las pestañas anteriores para configurar estos elementos para <strong>${lineaSeleccionadaNombre}</strong>.</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
-            <button type="button" class="btn btn-primary" onclick="irANivelesRiesgo()">
-              <i class="bi bi-bar-chart-steps me-1"></i>Ir a Niveles de Riesgo
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  document.body.insertAdjacentHTML("beforeend", modalHtml);
-  new bootstrap.Modal(document.getElementById("infoCriteriosModal")).show();
-}
-
-/**
- * Navega a la pestaña de niveles de riesgo
- */
-function irANivelesRiesgo() {
-  const modal = document.getElementById("infoCriteriosModal");
-  if (modal) {
-    bootstrap.Modal.getInstance(modal).hide();
-  }
-  
-  // Activar pestaña de niveles de riesgo
-  const tabNiveles = document.getElementById("niveles-linea-tab");
-  if (tabNiveles) {
-    tabNiveles.click();
-  }
+  console.log("Función agregarCriterioLinea llamada - pestaña oculta");
 }
 
 /**
