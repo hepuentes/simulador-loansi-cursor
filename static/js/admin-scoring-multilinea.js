@@ -1087,6 +1087,10 @@ function mostrarAlertaScoring(mensaje, tipo = "info", duracion = 5000) {
  * Muestra el modal para copiar configuración
  */
 function copiarConfiguracionModal() {
+  console.log("📋 Abriendo modal copiar configuración...");
+  console.log("📋 Línea seleccionada:", lineaSeleccionadaId, lineaSeleccionadaNombre);
+  console.log("📋 Líneas disponibles:", lineasCreditoDisponibles.length);
+  
   if (lineasCreditoDisponibles.length < 2) {
     mostrarAlertaScoring("Necesita al menos 2 líneas de crédito", "warning");
     return;
@@ -1097,20 +1101,22 @@ function copiarConfiguracionModal() {
     return;
   }
 
-  // Eliminar modal existente para recrearlo con datos frescos
-  const modalExistente = document.getElementById("copiarConfigModal");
-  if (modalExistente) {
-    // Cerrar modal si está abierto
-    const bsModal = bootstrap.Modal.getInstance(modalExistente);
-    if (bsModal) bsModal.hide();
-    modalExistente.remove();
-  }
+  // Eliminar TODOS los modales de copia existentes
+  document.querySelectorAll('#copiarConfigModal').forEach(m => {
+    try {
+      const bsModal = bootstrap.Modal.getInstance(m);
+      if (bsModal) bsModal.dispose();
+    } catch(e) {}
+    m.remove();
+  });
 
   // Crear opciones del select (excluir línea actual)
   const opcionesOrigen = lineasCreditoDisponibles
     .filter((l) => l.id !== lineaSeleccionadaId)
     .map((l) => `<option value="${l.id}">${l.nombre}</option>`)
     .join("");
+  
+  console.log("📋 Opciones origen (excluye línea actual):", opcionesOrigen);
 
   const modalHtml = `
     <div class="modal fade" id="copiarConfigModal" tabindex="-1">
