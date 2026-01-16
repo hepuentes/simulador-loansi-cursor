@@ -63,6 +63,7 @@ from db_helpers_scoring_linea import (
     cargar_scoring_por_linea,
     invalidar_cache_scoring_linea,
     verificar_tablas_scoring_linea,
+    crear_config_scoring_linea_defecto,
 )
 
 # ============================================
@@ -4415,31 +4416,49 @@ def crear_nueva_linea_credito():
             flash("Error al guardar la configuración principal")
             return redirect(url_for("admin") + "#TasasCredito")
 
+        # ============================================
+        # CREAR CONFIGURACIÓN DE SCORING MULTI-LÍNEA
+        # ============================================
         try:
-            scoring_config = cargar_configuracion_scoring()
-
-            for nivel in scoring_config.get("niveles_riesgo", []):
-                if "tasas_por_producto" not in nivel:
-                    nivel["tasas_por_producto"] = {}
-
-                nivel["tasas_por_producto"][nombre_linea] = {
-                    "tasa_anual": tasa_anual,
-                    "tasa_mensual": round(tasa_mensual_porcentaje, 4),
-                }
-
-            if not guardar_configuracion_scoring(scoring_config):
+            # Obtener el ID de la línea recién creada
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "loansi.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM lineas_credito WHERE nombre = ?", (nombre_linea,))
+            linea_row = cursor.fetchone()
+            conn.close()
+            
+            if linea_row:
+                linea_id = linea_row[0]
+                print(f"📦 Creando configuración de scoring para nueva línea: {nombre_linea} (ID: {linea_id})")
+                
+                # Crear configuración de scoring multi-línea por defecto
+                if crear_config_scoring_linea_defecto(linea_id, tasa_anual):
+                    print(f"✅ Configuración de scoring creada para {nombre_linea}")
+                else:
+                    flash(
+                        "Advertencia: La línea se creó pero hubo un error al crear el scoring automático",
+                        "warning"
+                    )
+            else:
+                print(f"⚠️ No se encontró ID para la línea {nombre_linea}")
                 flash(
-                    "Advertencia: La línea se creó pero no se pudo actualizar el scoring"
+                    "Advertencia: La línea se creó pero no se pudo configurar el scoring automático",
+                    "warning"
                 )
 
         except Exception as e:
-            print(f"Error al actualizar scoring: {str(e)}")
+            print(f"Error al crear scoring automático: {str(e)}")
+            import traceback
+            traceback.print_exc()
             flash(
-                "Advertencia: La línea se creó pero hubo un error al actualizar el scoring"
+                "Advertencia: La línea se creó pero hubo un error al configurar el scoring",
+                "warning"
             )
 
         flash(
-            f"Línea de crédito '{nombre_linea}' creada exitosamente y configurada en todas las secciones"
+            f"Línea de crédito '{nombre_linea}' creada exitosamente con scoring configurado automáticamente",
+            "success"
         )
         return redirect(url_for("admin") + "#TasasCredito")
 

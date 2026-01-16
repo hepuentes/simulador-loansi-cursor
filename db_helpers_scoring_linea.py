@@ -437,6 +437,156 @@ def guardar_config_scoring_linea(linea_id, config):
 
 
 # ============================================================================
+# CREAR CONFIGURACIÓN DE SCORING POR DEFECTO PARA NUEVA LÍNEA
+# ============================================================================
+
+def crear_config_scoring_linea_defecto(linea_id, tasa_anual=25.0, copiar_de_linea_id=None):
+    """
+    Crea la configuración de scoring por defecto para una nueva línea de crédito.
+    
+    Esta función se llama automáticamente cuando se crea una nueva línea de crédito.
+    Crea:
+    - Configuración general con valores por defecto
+    - 3 niveles de riesgo (Bajo Riesgo, Moderado, Alto Riesgo)
+    - Factores de rechazo básicos
+    
+    Args:
+        linea_id: ID de la línea de crédito recién creada
+        tasa_anual: Tasa anual base para calcular las tasas de niveles
+        copiar_de_linea_id: Si se especifica, copia la configuración de otra línea
+        
+    Returns:
+        bool: True si se creó exitosamente
+    """
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Si se especifica copiar de otra línea, usar esa función
+        if copiar_de_linea_id:
+            conn.close()
+            return copiar_config_scoring(copiar_de_linea_id, linea_id)
+        
+        # Verificar que la línea existe
+        cursor.execute("SELECT nombre FROM lineas_credito WHERE id = ?", (linea_id,))
+        linea = cursor.fetchone()
+        if not linea:
+            print(f"❌ Línea {linea_id} no existe")
+            return False
+        
+        nombre_linea = linea[0]
+        print(f"🔧 Creando configuración de scoring para nueva línea: {nombre_linea} (ID: {linea_id})")
+        
+        # 1. Crear configuración general
+        cursor.execute("""
+            INSERT OR REPLACE INTO scoring_config_linea
+            (linea_credito_id, puntaje_minimo_aprobacion, puntaje_revision_manual,
+             umbral_mora_telcos, edad_minima, edad_maxima, dti_maximo,
+             score_datacredito_minimo, consultas_max_3meses, escala_max,
+             activo, updated_at)
+            VALUES (?, 17, 10, 200000, 18, 65, 50, 400, 8, 100, 1, CURRENT_TIMESTAMP)
+        """, (linea_id,))
+        print(f"  ✅ Configuración general creada")
+        
+        # 2. Crear niveles de riesgo por defecto
+        # Calcular tasas basadas en la tasa anual de la línea
+        niveles_defecto = [
+            {
+                "nombre": "Bajo Riesgo",
+                "codigo": "bajo_riesgo",
+                "score_min": 70.1,
+                "score_max": 100.0,
+                "tasa_ea": tasa_anual,  # Tasa base
+                "aval_porcentaje": 0.065,
+                "color": "#28a745",
+                "orden": 1
+            },
+            {
+                "nombre": "Moderado",
+                "codigo": "moderado",
+                "score_min": 55.1,
+                "score_max": 70.0,
+                "tasa_ea": tasa_anual + 3,  # Tasa base + 3%
+                "aval_porcentaje": 0.10,
+                "color": "#ffc107",
+                "orden": 2
+            },
+            {
+                "nombre": "Alto Riesgo",
+                "codigo": "alto_riesgo",
+                "score_min": 0.0,
+                "score_max": 55.0,
+                "tasa_ea": tasa_anual + 8,  # Tasa base + 8%
+                "aval_porcentaje": 0.15,
+                "color": "#dc3545",
+                "orden": 3
+            }
+        ]
+        
+        for nivel in niveles_defecto:
+            # Calcular tasa nominal mensual: ((1 + tasa_ea/100)^(1/12) - 1) * 100
+            tasa_ea = nivel["tasa_ea"]
+            tasa_nominal = (pow(1 + tasa_ea/100, 1/12) - 1) * 100
+            
+            cursor.execute("""
+                INSERT INTO niveles_riesgo_linea
+                (linea_credito_id, nombre, codigo, score_min, score_max,
+                 tasa_ea, tasa_nominal_mensual, aval_porcentaje, color, orden, activo)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            """, (
+                linea_id,
+                nivel["nombre"],
+                nivel["codigo"],
+                nivel["score_min"],
+                nivel["score_max"],
+                nivel["tasa_ea"],
+                round(tasa_nominal, 4),
+                nivel["aval_porcentaje"],
+                nivel["color"],
+                nivel["orden"]
+            ))
+        print(f"  ✅ {len(niveles_defecto)} niveles de riesgo creados")
+        
+        # 3. Crear factores de rechazo básicos
+        factores_defecto = [
+            ("score_datacredito", "Score DataCrédito", "<", 400, "Score DataCrédito inferior al mínimo requerido"),
+            ("mora_sector_financiero", "Mora activa sector financiero", ">", 30, "Presenta mora activa en el sector financiero"),
+            ("mora_telcos", "Mora en telecomunicaciones", ">", 200000, "Mora en telecomunicaciones superior al umbral"),
+            ("mora_telcos_dias", "Mora telcos (días)", ">", 90, "Mora en telecomunicaciones mayor a 90 días"),
+            ("dti", "Relación deuda/ingreso (DTI)", ">", 50, "Nivel de endeudamiento superior al 50%"),
+            ("consultas_3meses", "Consultas últimos 3 meses", ">", 8, "Exceso de consultas crediticias"),
+            ("edad", "Edad del solicitante", "<", 18, f"Edad mínima 18 años para {nombre_linea}"),
+            ("edad", "Edad del solicitante", ">", 65, f"Edad máxima 65 años para {nombre_linea}"),
+        ]
+        
+        for i, (criterio, nombre, operador, valor, mensaje) in enumerate(factores_defecto):
+            cursor.execute("""
+                INSERT INTO factores_rechazo_linea
+                (linea_credito_id, criterio_codigo, criterio_nombre, operador,
+                 valor_umbral, mensaje_rechazo, activo, orden)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, (linea_id, criterio, nombre, operador, valor, mensaje, i + 1))
+        print(f"  ✅ {len(factores_defecto)} factores de rechazo creados")
+        
+        conn.commit()
+        
+        # Invalidar cache
+        invalidar_cache_scoring_linea(linea_id)
+        
+        print(f"✅ Configuración de scoring completa creada para {nombre_linea}")
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error creando config scoring por defecto: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        conn.close()
+
+
+# ============================================================================
 # FUNCIONES PARA NIVELES DE RIESGO POR LÍNEA
 # ============================================================================
 
