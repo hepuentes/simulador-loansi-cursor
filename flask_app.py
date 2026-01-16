@@ -8246,7 +8246,44 @@ def api_scoring_get_criterios_linea(linea_id):
 
 
 # -----------------------------------------------------------
-# API: Guardar un criterio de una línea
+# API: Guardar todos los criterios de una línea
+# -----------------------------------------------------------
+@app.route("/api/scoring/linea/<int:linea_id>/criterios", methods=["POST"])
+@no_cache_and_check_session
+@requiere_permiso("cfg_sco_editar")
+def api_scoring_save_criterios_linea(linea_id):
+    """Guarda todos los criterios de scoring para una línea."""
+    try:
+        # Validar CSRF
+        csrf_token = request.headers.get("X-CSRFToken") or request.form.get(
+            "csrf_token"
+        )
+        if not csrf_token:
+            return jsonify({"success": False, "error": "Token CSRF requerido"}), 403
+
+        data = request.get_json()
+        criterios = data.get("criterios", [])
+
+        from db_helpers_scoring_linea import guardar_criterios_completos_linea
+        resultado = guardar_criterios_completos_linea(linea_id, criterios)
+
+        if resultado:
+            return jsonify(
+                {"success": True, "message": f"{len(criterios)} criterios guardados"}
+            )
+        else:
+            return (
+                jsonify({"success": False, "error": "Error al guardar criterios"}),
+                500,
+            )
+
+    except Exception as e:
+        logger.error(f"Error guardando criterios: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# -----------------------------------------------------------
+# API: Guardar un criterio de una línea (individual)
 # -----------------------------------------------------------
 @app.route(
     "/api/scoring/linea/<int:linea_id>/criterios/<string:criterio_codigo>",

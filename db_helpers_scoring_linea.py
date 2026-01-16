@@ -241,7 +241,7 @@ def obtener_config_scoring_linea(linea_id):
         "config_general": {},
         "niveles_riesgo": [],
         "factores_rechazo": [],
-        "criterios": {}
+        "criterios": []
     }
     
     try:
@@ -330,7 +330,9 @@ def obtener_config_scoring_linea(linea_id):
                 "activo": bool(row[6])
             })
         
-        # 4. Criterios con configuración por línea
+        # 4. Criterios con configuración por línea (devuelve array para el frontend)
+        config["criterios"] = []
+        
         cursor.execute("""
             SELECT 
                 csm.codigo,
@@ -343,9 +345,9 @@ def obtener_config_scoring_linea(linea_id):
                 clc.orden,
                 clc.rangos_json
             FROM criterios_scoring_master csm
-            LEFT JOIN criterios_linea_credito clc 
+            INNER JOIN criterios_linea_credito clc 
                 ON csm.id = clc.criterio_master_id AND clc.linea_credito_id = ?
-            WHERE csm.activo = 1
+            WHERE csm.activo = 1 AND clc.activo = 1
             ORDER BY COALESCE(clc.orden, csm.id)
         """, (linea_id,))
         
@@ -357,7 +359,8 @@ def obtener_config_scoring_linea(linea_id):
                 except:
                     pass
             
-            config["criterios"][row[0]] = {
+            config["criterios"].append({
+                "codigo": row[0],
                 "nombre": row[1],
                 "descripcion": row[2],
                 "tipo_campo": row[3],
@@ -366,7 +369,7 @@ def obtener_config_scoring_linea(linea_id):
                 "activo": bool(row[6]) if row[6] is not None else True,
                 "orden": row[7] or 0,
                 "rangos": rangos
-            }
+            })
         
         # Guardar en cache
         _SCORING_LINEA_CACHE[cache_key] = (config, now)
@@ -1002,6 +1005,82 @@ def guardar_criterio_linea(linea_id, criterio_codigo, config):
     except Exception as e:
         conn.rollback()
         print(f"❌ Error guardando criterio: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def guardar_criterios_completos_linea(linea_id, criterios):
+    """
+    Guarda todos los criterios de scoring para una línea.
+    Maneja criterios como objetos completos con nombre, peso y rangos.
+    
+    Args:
+        linea_id: ID de la línea de crédito
+        criterios: Lista de criterios con formato:
+                   [{"codigo": "...", "nombre": "...", "peso": N, "rangos": [...]}]
+        
+    Returns:
+        bool: True si se guardó exitosamente
+    """
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Primero, asegurar que existen los criterios en el catálogo master
+        for i, criterio in enumerate(criterios):
+            codigo = criterio.get("codigo", f"criterio_{i}")
+            nombre = criterio.get("nombre", f"Criterio {i+1}")
+            descripcion = criterio.get("descripcion", "")
+            tipo_campo = criterio.get("tipo_campo", "numerico")
+            
+            # Verificar si existe en master, si no, crearlo
+            cursor.execute("SELECT id FROM criterios_scoring_master WHERE codigo = ?", (codigo,))
+            row = cursor.fetchone()
+            
+            if row:
+                master_id = row[0]
+                # Actualizar nombre y descripción
+                cursor.execute("""
+                    UPDATE criterios_scoring_master 
+                    SET nombre = ?, descripcion = ?, tipo_campo = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (nombre, descripcion, tipo_campo, master_id))
+            else:
+                # Crear nuevo criterio en master
+                cursor.execute("""
+                    INSERT INTO criterios_scoring_master 
+                    (codigo, nombre, descripcion, tipo_campo, activo)
+                    VALUES (?, ?, ?, ?, 1)
+                """, (codigo, nombre, descripcion, tipo_campo))
+                master_id = cursor.lastrowid
+            
+            # Guardar configuración del criterio para la línea
+            rangos_json = json.dumps(criterio.get("rangos", []), ensure_ascii=False)
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO criterios_linea_credito
+                (criterio_master_id, linea_credito_id, peso, activo, orden, rangos_json, updated_at)
+                VALUES (?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                master_id,
+                linea_id,
+                criterio.get("peso", 5),
+                i,
+                rangos_json
+            ))
+        
+        conn.commit()
+        invalidar_cache_scoring_linea(linea_id)
+        
+        print(f"✅ {len(criterios)} criterios guardados para línea {linea_id}")
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error guardando criterios completos: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         conn.close()

@@ -2340,19 +2340,12 @@ function reindexarRangos() {
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="factores-linea-tab" data-bs-toggle="tab" 
-                    data-bs-target="#factores-linea-content" type="button" role="tab">
-                <i class="bi bi-shield-x me-1"></i>Factores de Rechazo
+            <button class="nav-link" id="aprobacion-linea-tab" data-bs-toggle="tab" 
+                    data-bs-target="#aprobacion-linea-content" type="button" role="tab">
+                <i class="bi bi-check-circle me-1"></i>Configuración de Aprobación
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="config-linea-tab" data-bs-toggle="tab" 
-                    data-bs-target="#config-linea-content" type="button" role="tab">
-                <i class="bi bi-gear-fill me-1"></i>Configuración General
-            </button>
-        </li>
-        <!-- Pestaña de Criterios oculta - los criterios se gestionan globalmente -->
-        <li class="nav-item d-none" role="presentation">
             <button class="nav-link" id="criterios-linea-tab" data-bs-toggle="tab" 
                     data-bs-target="#criterios-linea-content" type="button" role="tab">
                 <i class="bi bi-list-check me-1"></i>Criterios de Scoring
@@ -2396,46 +2389,14 @@ function reindexarRangos() {
         </div>
 
         <!-- ============================================================ -->
-        <!-- PESTAÑA: Factores de Rechazo por Línea -->
+        <!-- PESTAÑA: Configuración de Aprobación por Línea -->
         <!-- ============================================================ -->
-        <div class="tab-pane fade" id="factores-linea-content" role="tabpanel">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>
-                        <i class="bi bi-shield-x me-2"></i>
-                        Factores de Rechazo Automático
-                    </span>
-                    <span class="badge bg-danger" id="badgeLineaFactores">-</span>
-                </div>
-                <div class="card-body">
-                    <div id="factoresRechazoLineaContainer">
-                        <!-- Renderizado dinámicamente -->
-                        <div class="text-center py-4 text-muted">
-                            <i class="bi bi-arrow-up-circle fs-1 d-block mb-2"></i>
-                            Seleccione una línea de crédito arriba para configurar sus factores de rechazo
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ============================================================ -->
-        <!-- PESTAÑA: Configuración General por Línea -->
-        <!-- ============================================================ -->
-        <div class="tab-pane fade" id="config-linea-content" role="tabpanel">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-gear-fill me-2"></i>
-                    Parámetros de Scoring
-                </div>
-                <div class="card-body">
-                    <div id="configGeneralLineaContainer">
-                        <!-- Renderizado dinámicamente -->
-                        <div class="text-center py-4 text-muted">
-                            <i class="bi bi-arrow-up-circle fs-1 d-block mb-2"></i>
-                            Seleccione una línea de crédito arriba para configurar sus parámetros
-                        </div>
-                    </div>
+        <div class="tab-pane fade" id="aprobacion-linea-content" role="tabpanel">
+            <div id="aprobacionLineaContainer">
+                <!-- Renderizado dinámicamente por JS -->
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-arrow-up-circle fs-1 d-block mb-2"></i>
+                    Seleccione una línea de crédito arriba para configurar los parámetros de aprobación
                 </div>
             </div>
         </div>
@@ -2444,25 +2405,11 @@ function reindexarRangos() {
         <!-- PESTAÑA: Criterios de Scoring por Línea -->
         <!-- ============================================================ -->
         <div class="tab-pane fade" id="criterios-linea-content" role="tabpanel">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>
-                        <i class="bi bi-list-check me-2"></i>
-                        Criterios y Pesos de Evaluación
-                    </span>
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="agregarCriterioLinea()">
-                        <i class="bi bi-plus-lg me-1"></i>Agregar Criterio
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div id="criteriosLineaContainer">
-                        <!-- Renderizado dinámicamente -->
-                        <div class="text-center py-4 text-muted">
-                            <i class="bi bi-arrow-up-circle fs-1 d-block mb-2"></i>
-                            Seleccione una línea de crédito arriba para configurar sus criterios
-                        </div>
-                    </div>
+            <div id="criteriosLineaContainer">
+                <!-- Renderizado dinámicamente por JS -->
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-arrow-up-circle fs-1 d-block mb-2"></i>
+                    Seleccione una línea de crédito arriba para configurar los criterios de scoring
                 </div>
             </div>
         </div>

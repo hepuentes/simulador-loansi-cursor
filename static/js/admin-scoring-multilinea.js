@@ -210,10 +210,10 @@ async function seleccionarLineaCredito(lineaId, nombreLinea) {
       // Actualizar info de línea
       actualizarInfoLinea(data.config);
 
-      // Renderizar contenido de las pestañas
+      // Renderizar contenido de las pestañas (nueva estructura)
       renderNivelesRiesgoLinea(data.config.niveles_riesgo);
-      renderFactoresRechazoLinea(data.config.factores_rechazo);
-      renderConfigGeneralLinea(data.config.config_general);
+      renderAprobacionLinea(data.config.config_general, data.config.factores_rechazo);
+      renderCriteriosLinea(data.config.criterios);
 
       mostrarContenidoScoring();
       console.log(`✅ Línea ${nombreLinea} lista para editar`);
@@ -790,164 +790,259 @@ async function guardarFactoresRechazoLinea() {
   }
 }
 
+/**
+ * Agrega un nuevo factor de rechazo en la pestaña de aprobación
+ */
+function agregarFactorRechazoLinea() {
+  if (!configScoringLinea) return;
+  
+  if (!configScoringLinea.factores_rechazo) {
+    configScoringLinea.factores_rechazo = [];
+  }
+  
+  configScoringLinea.factores_rechazo.push({
+    criterio_nombre: "Nuevo Factor",
+    criterio: "nuevo_factor",
+    operador: "<",
+    valor: 0,
+    mensaje: "Mensaje de rechazo"
+  });
+  
+  renderAprobacionLinea(configScoringLinea.config_general, configScoringLinea.factores_rechazo);
+  mostrarAlertaScoring("Factor agregado. Recuerde guardar los cambios.", "info");
+}
+
+/**
+ * Actualiza un factor de rechazo en memoria
+ */
+function actualizarFactorLinea(index, campo, valor) {
+  if (!configScoringLinea || !configScoringLinea.factores_rechazo) return;
+  
+  if (campo === 'valor') {
+    valor = parseFloat(valor);
+  }
+  
+  configScoringLinea.factores_rechazo[index][campo] = valor;
+}
+
+/**
+ * Elimina un factor de rechazo de la lista
+ */
+function eliminarFactorLinea(index) {
+  if (!configScoringLinea || !configScoringLinea.factores_rechazo) return;
+  
+  if (confirm("¿Está seguro de eliminar este factor de rechazo?")) {
+    configScoringLinea.factores_rechazo.splice(index, 1);
+    renderAprobacionLinea(configScoringLinea.config_general, configScoringLinea.factores_rechazo);
+    mostrarAlertaScoring("Factor eliminado. Recuerde guardar los cambios.", "info");
+  }
+}
+
 // ============================================================================
-// RENDERIZADO DE CONFIGURACIÓN GENERAL
+// RENDERIZADO DE CONFIGURACIÓN DE APROBACIÓN
 // ============================================================================
 
 /**
- * Renderiza la configuración general de la línea
+ * Renderiza la configuración de aprobación de la línea
+ * Incluye: parámetros de aprobación, umbrales y factores de rechazo
  */
-function renderConfigGeneralLinea(config) {
-  const container = document.getElementById("configGeneralLineaContainer");
+function renderAprobacionLinea(config, factores) {
+  const container = document.getElementById("aprobacionLineaContainer");
   if (!container) return;
 
   const cg = config || {};
+  const factoresArr = factores || [];
 
   let html = `
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <i class="bi bi-sliders me-2"></i>Parámetros de Aprobación
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">Puntaje mínimo de aprobación</label>
-                            <input type="number" class="form-control" id="cfgPuntajeMinimo"
-                                   value="${
-                                     cg.puntaje_minimo_aprobacion || 17
-                                   }" min="0" max="100"
-                                   onchange="actualizarConfigGeneral('puntaje_minimo_aprobacion', this.value)">
-                            <small class="text-muted">Puntaje mínimo para aprobación automática</small>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Puntaje para revisión manual</label>
-                            <input type="number" class="form-control" id="cfgPuntajeRevision"
-                                   value="${
-                                     cg.puntaje_revision_manual || 10
-                                   }" min="0" max="100"
-                                   onchange="actualizarConfigGeneral('puntaje_revision_manual', this.value)">
-                            <small class="text-muted">Por debajo de este puntaje, va a comité</small>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Escala máxima</label>
-                            <input type="number" class="form-control" id="cfgEscalaMax"
-                                   value="${
-                                     cg.escala_max || 100
-                                   }" min="50" max="200"
-                                   onchange="actualizarConfigGeneral('escala_max', this.value)">
-                        </div>
-                    </div>
-                </div>
+    <div class="row">
+      <!-- Parámetros de Aprobación -->
+      <div class="col-md-6">
+        <div class="card mb-3 border-success">
+          <div class="card-header bg-success text-white">
+            <i class="bi bi-check-circle me-2"></i>Parámetros de Aprobación
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Puntaje mínimo para aprobación</label>
+              <input type="number" class="form-control" id="cfgPuntajeMinimo"
+                     value="${cg.puntaje_minimo_aprobacion || 17}" min="0" max="100"
+                     onchange="actualizarConfigAprobacion('puntaje_minimo_aprobacion', this.value)">
+              <small class="text-muted">Clientes con puntaje ≥ a este valor serán <strong>aprobados automáticamente</strong></small>
             </div>
-            
-            <div class="col-md-6">
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <i class="bi bi-shield-check me-2"></i>Umbrales de Rechazo
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">Score DataCrédito mínimo</label>
-                            <input type="number" class="form-control" id="cfgScoreMin"
-                                   value="${
-                                     cg.score_datacredito_minimo || 400
-                                   }" min="150" max="900"
-                                   onchange="actualizarConfigGeneral('score_datacredito_minimo', this.value)">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Umbral mora telcos ($)</label>
-                            <input type="number" class="form-control" id="cfgMoraTelcos"
-                                   value="${
-                                     cg.umbral_mora_telcos || 200000
-                                   }" min="0" step="10000"
-                                   onchange="actualizarConfigGeneral('umbral_mora_telcos', this.value)">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Consultas máx. (3 meses)</label>
-                            <input type="number" class="form-control" id="cfgConsultasMax"
-                                   value="${
-                                     cg.consultas_max_3meses || 8
-                                   }" min="1" max="20"
-                                   onchange="actualizarConfigGeneral('consultas_max_3meses', this.value)">
-                        </div>
-                    </div>
-                </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Puntaje para revisión manual (Comité)</label>
+              <input type="number" class="form-control" id="cfgPuntajeRevision"
+                     value="${cg.puntaje_revision_manual || 10}" min="0" max="100"
+                     onchange="actualizarConfigAprobacion('puntaje_revision_manual', this.value)">
+              <small class="text-muted">Puntaje entre este valor y el mínimo va a <strong>comité de crédito</strong></small>
             </div>
-        </div>
-        
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <i class="bi bi-person me-2"></i>Requisitos del Cliente
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Edad mínima</label>
-                                <input type="number" class="form-control" id="cfgEdadMin"
-                                       value="${
-                                         cg.edad_minima || 18
-                                       }" min="18" max="99"
-                                       onchange="actualizarConfigGeneral('edad_minima', this.value)">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Edad máxima</label>
-                                <input type="number" class="form-control" id="cfgEdadMax"
-                                       value="${
-                                         cg.edad_maxima || 84
-                                       }" min="18" max="99"
-                                       onchange="actualizarConfigGeneral('edad_maxima', this.value)">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">DTI máximo (%)</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" id="cfgDTI"
-                                       value="${
-                                         cg.dti_maximo || 50
-                                       }" min="10" max="100"
-                                       onchange="actualizarConfigGeneral('dti_maximo', this.value)">
-                                <span class="input-group-text">%</span>
-                            </div>
-                            <small class="text-muted">Relación deuda/ingreso máxima</small>
-                        </div>
-                    </div>
-                </div>
+            <div class="alert alert-info py-2 mb-0">
+              <small>
+                <i class="bi bi-info-circle me-1"></i>
+                <strong>Lógica:</strong> Puntaje ≥ ${cg.puntaje_minimo_aprobacion || 17} = Aprobado | 
+                Puntaje ${cg.puntaje_revision_manual || 10}-${(cg.puntaje_minimo_aprobacion || 17) - 1} = Comité |
+                Puntaje < ${cg.puntaje_revision_manual || 10} = Rechazado
+              </small>
             </div>
+          </div>
         </div>
-        
-        <div class="text-end">
-            <button type="button" class="btn btn-primary" onclick="guardarConfigGeneralLinea()">
-                <i class="bi bi-check-lg me-1"></i>Guardar configuración
-            </button>
+      </div>
+      
+      <!-- Umbrales de Rechazo Automático -->
+      <div class="col-md-6">
+        <div class="card mb-3 border-danger">
+          <div class="card-header bg-danger text-white">
+            <i class="bi bi-shield-x me-2"></i>Umbrales de Rechazo Automático
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Score DataCrédito mínimo</label>
+              <input type="number" class="form-control" id="cfgScoreMin"
+                     value="${cg.score_datacredito_minimo || 400}" min="150" max="900"
+                     onchange="actualizarConfigAprobacion('score_datacredito_minimo', this.value)">
+              <small class="text-muted">Por debajo de este score = <strong>rechazo automático</strong></small>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Umbral mora telcos ($)</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control" id="cfgMoraTelcos"
+                       value="${cg.umbral_mora_telcos || 200000}" min="0" step="10000"
+                       onchange="actualizarConfigAprobacion('umbral_mora_telcos', this.value)">
+              </div>
+              <small class="text-muted">Mora superior a este monto = <strong>rechazo automático</strong></small>
+            </div>
+            <div class="row">
+              <div class="col-6 mb-3">
+                <label class="form-label fw-bold">Edad mínima</label>
+                <input type="number" class="form-control" id="cfgEdadMin"
+                       value="${cg.edad_minima || 18}" min="18" max="99"
+                       onchange="actualizarConfigAprobacion('edad_minima', this.value)">
+              </div>
+              <div class="col-6 mb-3">
+                <label class="form-label fw-bold">Edad máxima</label>
+                <input type="number" class="form-control" id="cfgEdadMax"
+                       value="${cg.edad_maxima || 84}" min="18" max="99"
+                       onchange="actualizarConfigAprobacion('edad_maxima', this.value)">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">DTI máximo (%)</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="cfgDTI"
+                       value="${cg.dti_maximo || 50}" min="10" max="100"
+                       onchange="actualizarConfigAprobacion('dti_maximo', this.value)">
+                <span class="input-group-text">%</span>
+              </div>
+              <small class="text-muted">Relación deuda/ingreso máxima permitida</small>
+            </div>
+          </div>
         </div>
-    `;
+      </div>
+    </div>
+    
+    <!-- Factores de Rechazo Personalizados -->
+    <div class="card mb-3 border-warning">
+      <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-exclamation-triangle me-2"></i>Factores de Rechazo Personalizados</span>
+        <button type="button" class="btn btn-sm btn-dark" onclick="agregarFactorRechazoLinea()">
+          <i class="bi bi-plus-lg me-1"></i>Agregar Factor
+        </button>
+      </div>
+      <div class="card-body">
+        ${factoresArr.length === 0 ? `
+          <div class="text-center text-muted py-3">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+            No hay factores de rechazo personalizados.
+            <br><small>Use el botón "Agregar Factor" para crear condiciones de rechazo específicas.</small>
+          </div>
+        ` : `
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead class="table-dark">
+                <tr>
+                  <th>Criterio</th>
+                  <th>Operador</th>
+                  <th>Valor</th>
+                  <th>Mensaje de rechazo</th>
+                  <th class="text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${factoresArr.map((f, i) => `
+                  <tr>
+                    <td>
+                      <input type="text" class="form-control form-control-sm"
+                             value="${f.criterio_nombre || f.criterio}"
+                             onchange="actualizarFactorLinea(${i}, 'criterio_nombre', this.value)">
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" onchange="actualizarFactorLinea(${i}, 'operador', this.value)">
+                        <option value="<" ${f.operador === '<' ? 'selected' : ''}>< menor</option>
+                        <option value="<=" ${f.operador === '<=' ? 'selected' : ''}>≤ menor o igual</option>
+                        <option value=">" ${f.operador === '>' ? 'selected' : ''}>> mayor</option>
+                        <option value=">=" ${f.operador === '>=' ? 'selected' : ''}>≥ mayor o igual</option>
+                        <option value="=" ${f.operador === '=' ? 'selected' : ''}}>= igual</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input type="number" class="form-control form-control-sm"
+                             value="${f.valor}" onchange="actualizarFactorLinea(${i}, 'valor', this.value)">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm"
+                             value="${f.mensaje || ''}" onchange="actualizarFactorLinea(${i}, 'mensaje', this.value)">
+                    </td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarFactorLinea(${i})">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `}
+      </div>
+    </div>
+    
+    <div class="text-end">
+      <button type="button" class="btn btn-outline-secondary me-2" onclick="refrescarConfigLinea()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Cancelar cambios
+      </button>
+      <button type="button" class="btn btn-primary" onclick="guardarAprobacionLinea()">
+        <i class="bi bi-check-lg me-1"></i>Guardar Configuración de Aprobación
+      </button>
+    </div>
+  `;
 
   container.innerHTML = html;
 }
 
 /**
- * Actualiza un campo de configuración general en memoria
+ * Actualiza un campo de configuración de aprobación en memoria
  */
-function actualizarConfigGeneral(campo, valor) {
-  if (!configScoringLinea || !configScoringLinea.config_general) return;
-
+function actualizarConfigAprobacion(campo, valor) {
+  if (!configScoringLinea) return;
+  if (!configScoringLinea.config_general) {
+    configScoringLinea.config_general = {};
+  }
   configScoringLinea.config_general[campo] = parseFloat(valor);
 }
 
 /**
- * Guarda la configuración general de la línea
+ * Guarda la configuración de aprobación (config general + factores de rechazo)
  */
-async function guardarConfigGeneralLinea() {
+async function guardarAprobacionLinea() {
   if (!lineaSeleccionadaId || !configScoringLinea) {
     mostrarAlertaScoring("No hay línea seleccionada", "warning");
     return;
   }
 
   try {
-    const response = await fetch(
+    // Guardar configuración general
+    const responseConfig = await fetch(
       `/api/scoring/linea/${lineaSeleccionadaId}/config`,
       {
         method: "POST",
@@ -961,17 +1056,215 @@ async function guardarConfigGeneralLinea() {
       }
     );
 
-    const data = await response.json();
+    // Guardar factores de rechazo
+    const responseFactores = await fetch(
+      `/api/scoring/linea/${lineaSeleccionadaId}/factores-rechazo`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCSRFToken(),
+        },
+        body: JSON.stringify({
+          factores: configScoringLinea.factores_rechazo || [],
+        }),
+      }
+    );
 
-    if (data.success) {
-      mostrarAlertaScoring("Configuración guardada exitosamente", "success");
+    const dataConfig = await responseConfig.json();
+    const dataFactores = await responseFactores.json();
+
+    if (dataConfig.success && dataFactores.success) {
+      mostrarAlertaScoring("Configuración de aprobación guardada exitosamente", "success");
     } else {
-      mostrarAlertaScoring(`Error: ${data.error}`, "danger");
+      mostrarAlertaScoring(`Error: ${dataConfig.error || dataFactores.error}`, "danger");
     }
   } catch (error) {
-    console.error("Error guardando config:", error);
+    console.error("Error guardando configuración:", error);
     mostrarAlertaScoring("Error de conexión", "danger");
   }
+}
+
+// ============================================================================
+// RENDERIZADO DE CRITERIOS DE SCORING
+// ============================================================================
+
+/**
+ * Renderiza los criterios de scoring para la línea
+ */
+function renderCriteriosLinea(criterios) {
+  const container = document.getElementById("criteriosLineaContainer");
+  if (!container) return;
+
+  // Convertir objeto a array si es necesario
+  let criteriosArray = [];
+  if (criterios) {
+    if (Array.isArray(criterios)) {
+      criteriosArray = criterios;
+    } else if (typeof criterios === 'object') {
+      criteriosArray = Object.entries(criterios).map(([codigo, c]) => ({
+        codigo,
+        ...c
+      }));
+    }
+  }
+
+  // Calcular suma de pesos
+  const sumaPesos = criteriosArray.reduce((sum, c) => sum + (parseFloat(c.peso) || 0), 0);
+
+  let html = `
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h5 class="mb-0">
+          <i class="bi bi-list-check me-2"></i>Criterios de Evaluación
+          <span class="badge bg-primary ms-2">${lineaSeleccionadaNombre}</span>
+        </h5>
+        <small class="text-muted">Los criterios determinan el puntaje del cliente. Los pesos deben sumar 100%.</small>
+      </div>
+      <div>
+        <span class="badge ${sumaPesos === 100 ? 'bg-success' : 'bg-danger'} fs-6">
+          Suma de pesos: ${sumaPesos.toFixed(1)}%
+        </span>
+        <button type="button" class="btn btn-success ms-2" onclick="agregarCriterioLinea()">
+          <i class="bi bi-plus-lg me-1"></i>Agregar Criterio
+        </button>
+      </div>
+    </div>
+    
+    ${sumaPesos !== 100 ? `
+      <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Atención:</strong> Los pesos de los criterios deben sumar exactamente 100%. 
+        Actualmente suman ${sumaPesos.toFixed(1)}%.
+      </div>
+    ` : ''}
+  `;
+
+  if (criteriosArray.length === 0) {
+    html += `
+      <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        No hay criterios de scoring configurados para esta línea.
+        <br><br>
+        <button type="button" class="btn btn-primary" onclick="crearCriteriosPorDefecto()">
+          <i class="bi bi-magic me-1"></i>Crear criterios por defecto
+        </button>
+      </div>
+    `;
+  } else {
+    // Mostrar criterios en acordeón
+    html += `<div class="accordion" id="accordionCriterios">`;
+    
+    criteriosArray.forEach((criterio, index) => {
+      const rangos = criterio.rangos || [];
+      const tieneRangos = rangos.length > 0;
+      
+      html += `
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button ${index > 0 ? 'collapsed' : ''}" type="button" 
+                    data-bs-toggle="collapse" data-bs-target="#criterio${index}">
+              <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                <span>
+                  <span class="badge bg-primary me-2">${criterio.peso || 0}%</span>
+                  <strong>${criterio.nombre || criterio.codigo}</strong>
+                  ${criterio.descripcion ? `<small class="text-muted ms-2">- ${criterio.descripcion}</small>` : ''}
+                </span>
+                <span>
+                  <span class="badge ${tieneRangos ? 'bg-success' : 'bg-secondary'}">${rangos.length} rangos</span>
+                </span>
+              </div>
+            </button>
+          </h2>
+          <div id="criterio${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}">
+            <div class="accordion-body">
+              <div class="row mb-3">
+                <div class="col-md-4">
+                  <label class="form-label">Nombre</label>
+                  <input type="text" class="form-control" value="${criterio.nombre || ''}"
+                         onchange="actualizarCriterioLinea(${index}, 'nombre', this.value)">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Peso (%)</label>
+                  <input type="number" class="form-control" value="${criterio.peso || 0}" min="0" max="100"
+                         onchange="actualizarCriterioLinea(${index}, 'peso', this.value)">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Descripción</label>
+                  <input type="text" class="form-control" value="${criterio.descripcion || ''}"
+                         onchange="actualizarCriterioLinea(${index}, 'descripcion', this.value)">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                  <button type="button" class="btn btn-outline-danger w-100" onclick="eliminarCriterioLinea(${index})">
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                  </button>
+                </div>
+              </div>
+              
+              <h6><i class="bi bi-rulers me-2"></i>Rangos de Puntuación</h6>
+              ${tieneRangos ? `
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered">
+                    <thead class="table-primary">
+                      <tr>
+                        <th>Mínimo</th>
+                        <th>Máximo</th>
+                        <th>Puntos</th>
+                        <th>Descripción</th>
+                        <th class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rangos.map((r, ri) => `
+                        <tr>
+                          <td><input type="number" class="form-control form-control-sm" value="${r.min}" 
+                                     onchange="actualizarRangoCriterio(${index}, ${ri}, 'min', this.value)"></td>
+                          <td><input type="number" class="form-control form-control-sm" value="${r.max}"
+                                     onchange="actualizarRangoCriterio(${index}, ${ri}, 'max', this.value)"></td>
+                          <td><input type="number" class="form-control form-control-sm" value="${r.puntos}"
+                                     onchange="actualizarRangoCriterio(${index}, ${ri}, 'puntos', this.value)"></td>
+                          <td><input type="text" class="form-control form-control-sm" value="${r.descripcion || ''}"
+                                     onchange="actualizarRangoCriterio(${index}, ${ri}, 'descripcion', this.value)"></td>
+                          <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                    onclick="eliminarRangoCriterio(${index}, ${ri})">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              ` : `
+                <div class="text-center text-muted py-2">
+                  <small>No hay rangos configurados</small>
+                </div>
+              `}
+              <button type="button" class="btn btn-sm btn-outline-success" onclick="agregarRangoCriterio(${index})">
+                <i class="bi bi-plus me-1"></i>Agregar Rango
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+  }
+
+  html += `
+    <div class="text-end mt-3">
+      <button type="button" class="btn btn-outline-secondary me-2" onclick="refrescarConfigLinea()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Cancelar cambios
+      </button>
+      <button type="button" class="btn btn-primary" onclick="guardarCriteriosLinea()">
+        <i class="bi bi-check-lg me-1"></i>Guardar Criterios
+      </button>
+    </div>
+  `;
+
+  container.innerHTML = html;
 }
 
 // ============================================================================
@@ -993,8 +1286,8 @@ async function refrescarConfigLinea() {
 function mostrarContenidoScoring() {
   const containers = [
     "nivelesRiesgoLineaContainer",
-    "factoresRechazoLineaContainer",
-    "configGeneralLineaContainer",
+    "aprobacionLineaContainer",
+    "criteriosLineaContainer",
   ];
 
   containers.forEach((id) => {
@@ -1006,8 +1299,8 @@ function mostrarContenidoScoring() {
 function ocultarContenidoScoring() {
   const containers = [
     "nivelesRiesgoLineaContainer",
-    "factoresRechazoLineaContainer",
-    "configGeneralLineaContainer",
+    "aprobacionLineaContainer",
+    "criteriosLineaContainer",
   ];
 
   containers.forEach((id) => {
@@ -1232,86 +1525,243 @@ function getCSRFToken() {
 }
 
 // ============================================================================
-// FUNCIONES PARA CRITERIOS POR LÍNEA (Pendiente implementación completa)
+// FUNCIONES PARA MANEJO DE CRITERIOS
 // ============================================================================
 
 /**
- * Función placeholder para agregar criterio
- * La pestaña de criterios está oculta, esta función no debería llamarse
+ * Agrega un nuevo criterio a la línea
  */
 function agregarCriterioLinea() {
-  console.log("Función agregarCriterioLinea llamada - pestaña oculta");
+  if (!configScoringLinea) return;
+  
+  if (!configScoringLinea.criterios) {
+    configScoringLinea.criterios = [];
+  }
+  
+  const numCriterios = configScoringLinea.criterios.length;
+  
+  configScoringLinea.criterios.push({
+    codigo: `criterio_${Date.now()}`,
+    nombre: `Nuevo Criterio ${numCriterios + 1}`,
+    descripcion: "",
+    peso: 10,
+    tipo_campo: "numerico",
+    rangos: []
+  });
+  
+  renderCriteriosLinea(configScoringLinea.criterios);
+  mostrarAlertaScoring("Criterio agregado. Recuerde guardar los cambios.", "info");
 }
 
 /**
- * Renderiza los criterios de scoring para la línea seleccionada
- * @param {Array} criterios - Lista de criterios
+ * Actualiza un campo de criterio en memoria
  */
-function renderCriteriosLinea(criterios) {
-  const container = document.getElementById("criteriosLineaContainer");
-  if (!container) return;
-
-  // Los criterios se comparten entre líneas (catálogo maestro)
-  let html = `
-        <div class="alert alert-info mb-3">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>Criterios de Evaluación</strong>: Los criterios de scoring se aplican a todas las líneas
-            de crédito. Lo que diferencia cada línea son los <strong>niveles de riesgo</strong> y los 
-            <strong>factores de rechazo</strong> que puede configurar en las pestañas anteriores.
-        </div>
-    `;
-
-  if (!criterios || Object.keys(criterios).length === 0) {
-    html += `
-            <div class="text-center py-4 text-muted">
-                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                No hay criterios en el catálogo maestro.
-            </div>
-        `;
-    container.innerHTML = html;
-    return;
+function actualizarCriterioLinea(index, campo, valor) {
+  if (!configScoringLinea || !configScoringLinea.criterios) return;
+  
+  if (campo === 'peso') {
+    valor = parseFloat(valor);
   }
+  
+  configScoringLinea.criterios[index][campo] = valor;
+  
+  // Re-renderizar para actualizar la suma de pesos
+  if (campo === 'peso') {
+    renderCriteriosLinea(configScoringLinea.criterios);
+  }
+}
 
-  const criteriosArray = Object.entries(criterios);
+/**
+ * Elimina un criterio de la línea
+ */
+function eliminarCriterioLinea(index) {
+  if (!configScoringLinea || !configScoringLinea.criterios) return;
   
-  html += `
-        <p class="text-muted small mb-3">
-            <i class="bi bi-check-circle text-success me-1"></i>
-            ${criteriosArray.length} criterios activos en el catálogo maestro
-        </p>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover">
-                <thead class="table-light">
-                    <tr>
-                        <th>Criterio</th>
-                        <th class="text-center">Peso</th>
-                        <th>Tipo</th>
-                        <th class="text-center">Rangos</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
+  const criterio = configScoringLinea.criterios[index];
+  if (confirm(`¿Está seguro de eliminar el criterio "${criterio.nombre}"?`)) {
+    configScoringLinea.criterios.splice(index, 1);
+    renderCriteriosLinea(configScoringLinea.criterios);
+    mostrarAlertaScoring("Criterio eliminado. Recuerde guardar los cambios.", "info");
+  }
+}
+
+/**
+ * Agrega un rango a un criterio
+ */
+function agregarRangoCriterio(criterioIndex) {
+  if (!configScoringLinea || !configScoringLinea.criterios) return;
   
-  criteriosArray.forEach(([codigo, c]) => {
-    const numRangos = c.rangos ? c.rangos.length : 0;
-    html += `
-                <tr>
-                    <td>
-                        <strong>${c.nombre || codigo}</strong>
-                        ${c.descripcion ? `<br><small class="text-muted">${c.descripcion}</small>` : ''}
-                    </td>
-                    <td class="text-center">${c.peso || 5}</td>
-                    <td><span class="badge bg-secondary">${c.tipo_campo || 'numerico'}</span></td>
-                    <td class="text-center">${numRangos}</td>
-                </tr>
-            `;
+  if (!configScoringLinea.criterios[criterioIndex].rangos) {
+    configScoringLinea.criterios[criterioIndex].rangos = [];
+  }
+  
+  configScoringLinea.criterios[criterioIndex].rangos.push({
+    min: 0,
+    max: 100,
+    puntos: 10,
+    descripcion: "Nuevo rango"
   });
   
-  html += `
-                </tbody>
-            </table>
-        </div>
-    `;
+  renderCriteriosLinea(configScoringLinea.criterios);
+}
 
-  container.innerHTML = html;
+/**
+ * Actualiza un rango de criterio
+ */
+function actualizarRangoCriterio(criterioIndex, rangoIndex, campo, valor) {
+  if (!configScoringLinea || !configScoringLinea.criterios) return;
+  
+  if (campo === 'min' || campo === 'max' || campo === 'puntos') {
+    valor = parseFloat(valor);
+  }
+  
+  configScoringLinea.criterios[criterioIndex].rangos[rangoIndex][campo] = valor;
+}
+
+/**
+ * Elimina un rango de criterio
+ */
+function eliminarRangoCriterio(criterioIndex, rangoIndex) {
+  if (!configScoringLinea || !configScoringLinea.criterios) return;
+  
+  if (confirm("¿Está seguro de eliminar este rango?")) {
+    configScoringLinea.criterios[criterioIndex].rangos.splice(rangoIndex, 1);
+    renderCriteriosLinea(configScoringLinea.criterios);
+  }
+}
+
+/**
+ * Crea criterios por defecto para la línea
+ */
+function crearCriteriosPorDefecto() {
+  if (!configScoringLinea) return;
+  
+  configScoringLinea.criterios = [
+    {
+      codigo: "edad",
+      nombre: "Edad del Cliente",
+      descripcion: "Rango de edad del solicitante",
+      peso: 10,
+      tipo_campo: "numerico",
+      rangos: [
+        { min: 18, max: 25, puntos: 15, descripcion: "Joven" },
+        { min: 26, max: 40, puntos: 25, descripcion: "Adulto joven" },
+        { min: 41, max: 60, puntos: 20, descripcion: "Adulto" },
+        { min: 61, max: 84, puntos: 10, descripcion: "Adulto mayor" }
+      ]
+    },
+    {
+      codigo: "score_datacredito",
+      nombre: "Score DataCrédito",
+      descripcion: "Puntaje de buró de crédito",
+      peso: 25,
+      tipo_campo: "numerico",
+      rangos: [
+        { min: 700, max: 950, puntos: 25, descripcion: "Excelente" },
+        { min: 600, max: 699, puntos: 20, descripcion: "Bueno" },
+        { min: 500, max: 599, puntos: 15, descripcion: "Regular" },
+        { min: 400, max: 499, puntos: 10, descripcion: "Bajo" }
+      ]
+    },
+    {
+      codigo: "ingresos",
+      nombre: "Nivel de Ingresos",
+      descripcion: "Ingresos mensuales del solicitante",
+      peso: 20,
+      tipo_campo: "numerico",
+      rangos: [
+        { min: 5000000, max: 999999999, puntos: 25, descripcion: "Muy alto" },
+        { min: 3000000, max: 4999999, puntos: 20, descripcion: "Alto" },
+        { min: 1500000, max: 2999999, puntos: 15, descripcion: "Medio" },
+        { min: 1000000, max: 1499999, puntos: 10, descripcion: "Bajo" }
+      ]
+    },
+    {
+      codigo: "antiguedad_laboral",
+      nombre: "Antigüedad Laboral",
+      descripcion: "Tiempo en el empleo actual (meses)",
+      peso: 15,
+      tipo_campo: "numerico",
+      rangos: [
+        { min: 36, max: 999, puntos: 25, descripcion: "3+ años" },
+        { min: 24, max: 35, puntos: 20, descripcion: "2-3 años" },
+        { min: 12, max: 23, puntos: 15, descripcion: "1-2 años" },
+        { min: 6, max: 11, puntos: 10, descripcion: "6-12 meses" }
+      ]
+    },
+    {
+      codigo: "tipo_contrato",
+      nombre: "Tipo de Contrato",
+      descripcion: "Estabilidad laboral",
+      peso: 15,
+      tipo_campo: "seleccion",
+      rangos: [
+        { min: 0, max: 0, puntos: 25, descripcion: "Indefinido" },
+        { min: 1, max: 1, puntos: 15, descripcion: "Fijo" },
+        { min: 2, max: 2, puntos: 10, descripcion: "Prestación de servicios" }
+      ]
+    },
+    {
+      codigo: "nivel_endeudamiento",
+      nombre: "Nivel de Endeudamiento",
+      descripcion: "DTI - Relación deuda/ingreso",
+      peso: 15,
+      tipo_campo: "numerico",
+      rangos: [
+        { min: 0, max: 20, puntos: 25, descripcion: "Muy bajo" },
+        { min: 21, max: 35, puntos: 20, descripcion: "Bajo" },
+        { min: 36, max: 50, puntos: 15, descripcion: "Moderado" },
+        { min: 51, max: 70, puntos: 5, descripcion: "Alto" }
+      ]
+    }
+  ];
+  
+  renderCriteriosLinea(configScoringLinea.criterios);
+  mostrarAlertaScoring("Criterios por defecto creados. Recuerde guardar los cambios.", "success");
+}
+
+/**
+ * Guarda los criterios de la línea
+ */
+async function guardarCriteriosLinea() {
+  if (!lineaSeleccionadaId || !configScoringLinea) {
+    mostrarAlertaScoring("No hay línea seleccionada", "warning");
+    return;
+  }
+  
+  // Validar que los pesos sumen 100
+  const criterios = configScoringLinea.criterios || [];
+  const sumaPesos = criterios.reduce((sum, c) => sum + (parseFloat(c.peso) || 0), 0);
+  
+  if (Math.abs(sumaPesos - 100) > 0.1) {
+    mostrarAlertaScoring(`Los pesos deben sumar 100%. Actualmente suman ${sumaPesos.toFixed(1)}%`, "danger");
+    return;
+  }
+  
+  try {
+    const response = await fetch(
+      `/api/scoring/linea/${lineaSeleccionadaId}/criterios`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCSRFToken(),
+        },
+        body: JSON.stringify({
+          criterios: configScoringLinea.criterios,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.success) {
+      mostrarAlertaScoring("Criterios guardados exitosamente", "success");
+    } else {
+      mostrarAlertaScoring(`Error: ${data.error}`, "danger");
+    }
+  } catch (error) {
+    console.error("Error guardando criterios:", error);
+    mostrarAlertaScoring("Error de conexión", "danger");
+  }
 }
